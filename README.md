@@ -86,8 +86,9 @@ Create `abla-tests.json` in the project root:
 ```
 
 Supported substitutions in commands, arguments, directories, and environment
-values are `${root}`, `${test}`, and `${log}`. `platform` may be `any`,
-`linux`, or `macos`.
+values are `${root}`, `${test}`, and `${log}`. Named `@name@` substitutions can
+be supplied with repeatable `--set name=value` options. `platform` may be
+`any`, `linux`, or `macos`.
 
 Run it with:
 
@@ -95,6 +96,7 @@ Run it with:
 abla-test
 abla-test --jobs 16
 abla-test --filter crypto
+abla-test --set compiler=/opt/abla/bin/ablac
 abla-test --list
 abla-test --fail-fast
 abla-test --root /path/to/project --file tests/native.json

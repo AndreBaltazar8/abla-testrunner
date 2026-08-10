@@ -44,8 +44,12 @@ class TestRunnerOptions(
     val jobs: int,
     val filter: string,
     val listOnly: bool,
-    val failFast: bool
+    val failFast: bool,
+    val variableNames: array<string>,
+    val variableValues: array<string>
 )
+
+class TestSetting(val name: string, val value: string, val valid: bool)
 
 class TestExecution(
     val test: TestDefinition,
@@ -108,10 +112,22 @@ fun testExpand(
     value: string,
     root: string,
     name: string,
-    logDirectory: string
-): string = testReplace(testReplace(testReplace(
-    value, "\${root}", root
-), "\${test}", name), "\${log}", logDirectory)
+    logDirectory: string,
+    variableNames: array<string>,
+    variableValues: array<string>
+): string {
+    var output = testReplace(testReplace(testReplace(
+        value, "\${root}", root
+    ), "\${test}", name), "\${log}", logDirectory)
+    var index = 0
+    while (index < variableNames.size && index < variableValues.size) {
+        output = testReplace(
+            output, "@${variableNames[index]}@", variableValues[index]
+        )
+        index = index + 1
+    }
+    output
+}
 
 fun testAbsolute(path: string): bool = path.size > 0 && path[0] == 47
 
@@ -314,11 +330,16 @@ fun testAppendExpanded(
     values: array<string>,
     root: string,
     name: string,
-    logDirectory: string
+    logDirectory: string,
+    variableNames: array<string>,
+    variableValues: array<string>
 ): void {
     var index = 0
     while (index < values.size) {
-        output.append(testExpand(values[index], root, name, logDirectory))
+        output.append(testExpand(
+            values[index], root, name, logDirectory,
+            variableNames, variableValues
+        ))
         index = index + 1
     }
     return
@@ -327,38 +348,45 @@ fun testAppendExpanded(
 fun testLaunchStep(
     execution: TestExecution,
     suite: TestSuite,
-    root: string,
+    options: TestRunnerOptions,
     logDirectory: string
 ): TestLaunch {
     val step = execution.test.steps[execution.stepIndex]
     val safeName = testSafeName(execution.test.name)
     val logPath = "$logDirectory/$safeName.${execution.stepIndex + 1}.log"
     val arguments: array<string> = [testExpand(
-        step.command, root, execution.test.name, logDirectory
+        step.command, options.root, execution.test.name, logDirectory,
+        options.variableNames, options.variableValues
     )]
     testAppendExpanded(
-        arguments, step.arguments, root, execution.test.name, logDirectory
+        arguments, step.arguments, options.root, execution.test.name,
+        logDirectory, options.variableNames, options.variableValues
     )
     val environmentNames: array<string> = []
     val environmentValues: array<string> = []
     testAppendExpanded(
         environmentNames, suite.environmentNames,
-        root, execution.test.name, logDirectory
+        options.root, execution.test.name, logDirectory,
+        options.variableNames, options.variableValues
     )
     testAppendExpanded(
         environmentValues, suite.environmentValues,
-        root, execution.test.name, logDirectory
+        options.root, execution.test.name, logDirectory,
+        options.variableNames, options.variableValues
     )
     testAppendExpanded(
         environmentNames, step.environmentNames,
-        root, execution.test.name, logDirectory
+        options.root, execution.test.name, logDirectory,
+        options.variableNames, options.variableValues
     )
     testAppendExpanded(
         environmentValues, step.environmentValues,
-        root, execution.test.name, logDirectory
+        options.root, execution.test.name, logDirectory,
+        options.variableNames, options.variableValues
     )
-    val configuredDirectory = testPath(root, testExpand(
-        step.directory, root, execution.test.name, logDirectory
+    val configuredDirectory = testPath(options.root, testExpand(
+        step.directory, options.root, execution.test.name, logDirectory,
+        options.variableNames, options.variableValues
     ))
     val now = processMonotonicMilliseconds()
     val process = startSupervisedProcess(
@@ -374,10 +402,10 @@ fun testLaunchStep(
 fun testStartStep(
     var execution: TestExecution,
     suite: TestSuite,
-    root: string,
+    options: TestRunnerOptions,
     logDirectory: string
 ): void {
-    val launch = testLaunchStep(execution, suite, root, logDirectory)
+    val launch = testLaunchStep(execution, suite, options, logDirectory)
     execution.process = launch.process
     execution.state = "running"
     execution.stepStarted = launch.started
@@ -408,7 +436,7 @@ fun testExclusiveRunning(executions: array<TestExecution>): bool {
 fun testPollExecution(
     var execution: TestExecution,
     suite: TestSuite,
-    root: string,
+    options: TestRunnerOptions,
     logDirectory: string,
     now: int
 ): string {
@@ -426,7 +454,7 @@ fun testPollExecution(
         if (status == expected && !execution.timedOut &&
             execution.stepIndex + 1 < execution.test.steps.size) {
             execution.stepIndex = execution.stepIndex + 1
-            testStartStep(execution, suite, root, logDirectory)
+            testStartStep(execution, suite, options, logDirectory)
         } else {
             execution.finished = processMonotonicMilliseconds()
             if (status == expected && !execution.timedOut) {
@@ -505,7 +533,7 @@ fun runTestSuite(
         while (index < executions.size) {
             if (executions[index].state == "running") {
                 val outcome = testPollExecution(
-                    executions[index], suite, options.root, logDirectory, now
+                    executions[index], suite, options, logDirectory, now
                 )
                 if (outcome == "passed" || outcome == "failed") {
                     running = running - 1
@@ -539,7 +567,7 @@ fun runTestSuite(
             }
             else {
                 testStartStep(
-                    executions[nextToStart], suite, options.root, logDirectory
+                    executions[nextToStart], suite, options, logDirectory
                 )
                 running = running + 1
                 val exclusive = executions[nextToStart].test.exclusive
@@ -576,8 +604,23 @@ fun testParsePositive(value: string): int {
     if (valid && result > 0) result else 0
 }
 
+fun testParseSetting(value: string): TestSetting {
+    var separator = -1
+    var index = 0
+    while (separator < 0 && index < value.size) {
+        if (value[index] == 61) separator = index
+        index = index + 1
+    }
+    if (separator <= 0) TestSetting("", "", false)
+    else TestSetting(
+        value.slice(0, separator),
+        value.slice(separator + 1, value.size),
+        true
+    )
+}
+
 fun testRunnerUsage(): string =
-    "usage: abla-test [--file PATH] [--root PATH] [--jobs N] [--filter TEXT] [--list] [--fail-fast]\n"
+    "usage: abla-test [--file PATH] [--root PATH] [--jobs N] [--filter TEXT] [--set NAME=VALUE] [--list] [--fail-fast]\n"
 
 fun runTestCommand(arguments: array<string>): int {
     var root = ablaHostCurrentDirectory()
@@ -586,6 +629,8 @@ fun runTestCommand(arguments: array<string>): int {
     var filter = ""
     var listOnly = false
     var failFast = false
+    val variableNames: array<string> = []
+    val variableValues: array<string> = []
     var error = ""
     var index = 0
     while (error == "" && index < arguments.size) {
@@ -596,7 +641,8 @@ fun runTestCommand(arguments: array<string>): int {
             ablaHostWriteStdout(testRunnerUsage())
             return 0
         } else if (argument == "--file" || argument == "--root" ||
-            argument == "--jobs" || argument == "--filter") {
+            argument == "--jobs" || argument == "--filter" ||
+            argument == "--set") {
             if (index + 1 >= arguments.size) error = "$argument needs a value"
             else {
                 index = index + 1
@@ -604,6 +650,14 @@ fun runTestCommand(arguments: array<string>): int {
                 if (argument == "--file") file = value
                 if (argument == "--root") root = value
                 if (argument == "--filter") filter = value
+                if (argument == "--set") {
+                    val setting = testParseSetting(value)
+                    if (!setting.valid) error = "--set needs NAME=VALUE"
+                    else {
+                        variableNames.append(setting.name)
+                        variableValues.append(setting.value)
+                    }
+                }
                 if (argument == "--jobs") {
                     jobs = testParsePositive(value)
                     if (jobs == 0 || jobs > 64) error = "--jobs must be 1...64"
@@ -628,7 +682,10 @@ fun runTestCommand(arguments: array<string>): int {
     }
     val summary = runTestSuite(
         loaded.suite,
-        TestRunnerOptions(root, file, jobs, filter, listOnly, failFast)
+        TestRunnerOptions(
+            root, file, jobs, filter, listOnly, failFast,
+            variableNames, variableValues
+        )
     )
     if (summary.failed == 0) 0 else 1
 }
