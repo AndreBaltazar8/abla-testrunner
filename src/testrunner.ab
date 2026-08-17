@@ -1,8 +1,12 @@
 // Bounded parallel, process-isolated test runner for hosted Abla programs.
 
 import "abla/json"
-import "abla/platform/host"
+import "abla/fs"
+import "abla/io"
+import "abla/process/time"
 import "abla/process/supervisor"
+
+noescape extern:"intrinsic" fun ablaHostIsMacOS(): bool
 
 class TestEnvironment(
     val names: array<string>,
@@ -653,16 +657,16 @@ fun testPrintFailure(execution: TestExecution): void {
     val step = execution.test.steps[execution.stepIndex]
     val duration = execution.finished - execution.testStarted
     val timeout = if (execution.timedOut) " (timeout)" else ""
-    ablaHostWriteStderr(
+    eprint(
         "FAIL ${execution.test.name} ${duration}ms: step ${execution.stepIndex + 1} expected ${step.expectedStatus}, got ${execution.actualStatus}$timeout\n"
     )
-    if (ablaHostFileKind(execution.logPath) == 1) {
-        val output = ablaHostReadFile(execution.logPath)
+    if (path(execution.logPath).info().isFile()) {
+        val output = path(execution.logPath).readText()
         if (output != "") {
             val shown = if (output.size > 4000) output.slice(0, 4000) else output
-            ablaHostWriteStderr("--- ${execution.logPath} ---\n$shown")
-            if (shown[shown.size - 1] != 10) ablaHostWriteStderr("\n")
-            if (output.size > shown.size) ablaHostWriteStderr("... output truncated\n")
+            eprint("--- ${execution.logPath} ---\n$shown")
+            if (shown[shown.size - 1] != 10) eprint("\n")
+            if (output.size > shown.size) eprint("... output truncated\n")
         }
     }
     return
@@ -676,7 +680,7 @@ fun runTestSuite(
     if (jobs <= 0) jobs = processProcessorCount()
     if (jobs > 64) jobs = 64
     val logDirectory = testPath(options.root, suite.logDirectory)
-    ablaHostCreateDirectories(logDirectory)
+    path(logDirectory).createDirectories()
     val executions: array<TestExecution> = []
     val selected = testSelectDefinitions(suite, options.filter)
     var index = 0
@@ -690,7 +694,7 @@ fun runTestSuite(
     if (options.listOnly) {
         index = 0
         while (index < executions.size) {
-            ablaHostWriteStdout("${executions[index].test.name}\n")
+            print("${executions[index].test.name}\n")
             index = index + 1
         }
         return TestRunSummary(0, 0, executions.size, 0)
@@ -701,7 +705,7 @@ fun runTestSuite(
     var failed = 0
     var skipped = 0
     var completed = 0
-    ablaHostWriteStdout(
+    print(
         "abla-test: ${executions.size} test(s), $jobs parallel job(s)\n"
     )
     while (completed + skipped < executions.size) {
@@ -720,7 +724,7 @@ fun runTestSuite(
                         val duration = executions[index].finished -
                             executions[index].testStarted
                         val name = executions[index].test.name
-                        ablaHostWriteStdout("PASS $name ${duration}ms\n")
+                        print("PASS $name ${duration}ms\n")
                     } else {
                         failed = failed + 1
                         testPrintFailure(executions[index])
@@ -739,7 +743,7 @@ fun runTestSuite(
                     skipped = skipped + 1
                     val name = executions[index].test.name
                     val platform = executions[index].test.platform
-                    ablaHostWriteStdout("SKIP $name ($platform)\n")
+                    print("SKIP $name ($platform)\n")
                 } else {
                     val blocked = testBlockingDependency(
                         executions[index], executions
@@ -748,7 +752,7 @@ fun runTestSuite(
                         executions[index].state = "skipped"
                         skipped = skipped + 1
                         val name = executions[index].test.name
-                        ablaHostWriteStdout(
+                        print(
                             "SKIP $name (dependency $blocked did not pass)\n"
                         )
                     } else if (testDependenciesPassed(
@@ -779,10 +783,10 @@ fun runTestSuite(
                 index = index + 1
             }
         }
-        if (running > 0) ablaHostSleep(5)
+        if (running > 0) sleep(5)
     }
     val duration = processMonotonicMilliseconds() - started
-    ablaHostWriteStdout(
+    print(
         "abla-test: $passed passed, $failed failed, $skipped skipped in ${duration}ms\n"
     )
     TestRunSummary(passed, failed, skipped, duration)
@@ -820,7 +824,7 @@ fun testRunnerUsage(): string =
     "usage: abla-test [--file PATH] [--root PATH] [--jobs N] [--filter TEXT] [--set NAME=VALUE] [--list] [--fail-fast]\n"
 
 fun runTestCommand(arguments: array<string>): int {
-    var root = ablaHostCurrentDirectory()
+    var root = currentDirectory().text
     var file = "abla-tests.json"
     var jobs = 0
     var filter = ""
@@ -835,7 +839,7 @@ fun runTestCommand(arguments: array<string>): int {
         if (argument == "--list") listOnly = true
         else if (argument == "--fail-fast") failFast = true
         else if (argument == "--help" || argument == "-h") {
-            ablaHostWriteStdout(testRunnerUsage())
+            print(testRunnerUsage())
             return 0
         } else if (argument == "--file" || argument == "--root" ||
             argument == "--jobs" || argument == "--filter" ||
@@ -864,17 +868,17 @@ fun runTestCommand(arguments: array<string>): int {
         index = index + 1
     }
     if (error != "") {
-        ablaHostWriteStderr("abla-test: $error\n${testRunnerUsage()}")
+        eprint("abla-test: $error\n${testRunnerUsage()}")
         return 2
     }
     val manifestPath = testPath(root, file)
-    if (ablaHostFileKind(manifestPath) != 1) {
-        ablaHostWriteStderr("abla-test: manifest not found: $manifestPath\n")
+    if (!path(manifestPath).info().isFile()) {
+        eprint("abla-test: manifest not found: $manifestPath\n")
         return 2
     }
-    val loaded = loadTestSuite(ablaHostReadFile(manifestPath))
+    val loaded = loadTestSuite(path(manifestPath).readText())
     if (loaded.error != "") {
-        ablaHostWriteStderr("abla-test: ${loaded.error}\n")
+        eprint("abla-test: ${loaded.error}\n")
         return 2
     }
     val summary = runTestSuite(
