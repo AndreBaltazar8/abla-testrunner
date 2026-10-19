@@ -5,8 +5,8 @@ import "abla/fs"
 import "abla/io"
 import "abla/process/time"
 import "abla/process/supervisor"
+import "abla/platform/host"
 
-noescape extern:"intrinsic" fun ablaHostIsMacOS(): bool
 
 class TestEnvironment(
     val names: array<string>,

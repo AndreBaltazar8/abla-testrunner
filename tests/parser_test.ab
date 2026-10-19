@@ -1,11 +1,12 @@
 import "../src/testrunner.ab"
-import "abla/platform/host"
+import "abla/fs"
+import "abla/process/time"
 
 fun main: int {
-    val root = ablaHostCurrentDirectory()
-    val loaded = loadTestSuite(ablaHostReadFile("$root/tests/pass.json"))
+    val root = currentDirectory().text
+    val loaded = loadTestSuite(path("$root/tests/pass.json").readText())
     val dependencies = loadTestSuite(
-        ablaHostReadFile("$root/tests/dependencies.json")
+        path("$root/tests/dependencies.json").readText()
     )
     val invalidVersion = loadTestSuite("{\"version\":2,\"tests\":[]}")
     val invalidArguments = loadTestSuite(

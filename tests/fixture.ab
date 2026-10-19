@@ -1,4 +1,6 @@
-import "abla/platform/host"
+import "abla/io"
+import "abla/process/arguments"
+import "abla/process/time"
 
 fun fixtureInt(value: string): int {
     var result = 0
@@ -11,10 +13,10 @@ fun fixtureInt(value: string): int {
 }
 
 fun main: int {
-    val delay = fixtureInt(ablaHostArgument(0))
-    val status = fixtureInt(ablaHostArgument(1))
-    val message = ablaHostArgument(2)
-    ablaHostSleep(delay)
-    ablaHostWriteStdout("$message\n")
+    val delay = fixtureInt(processArgument(0))
+    val status = fixtureInt(processArgument(1))
+    val message = processArgument(2)
+    sleep(delay)
+    print("$message\n")
     status
 }

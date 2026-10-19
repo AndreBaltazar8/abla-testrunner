@@ -1,11 +1,12 @@
 import "../src/testrunner.ab"
-import "abla/platform/host"
+import "abla/fs"
+import "abla/process/time"
 
 fun main: int {
-    val root = ablaHostCurrentDirectory()
-    val started = ablaHostMonotonicMilliseconds()
+    val root = currentDirectory().text
+    val started = monotonicMilliseconds()
     val passed = runTestCommand(["--file", "tests/pass.json", "--jobs", "4"])
-    val elapsed = ablaHostMonotonicMilliseconds() - started
+    val elapsed = monotonicMilliseconds() - started
     val failed = runTestCommand(["--file", "tests/fail.json"])
     val filtered = runTestCommand([
         "--file", "tests/pass.json", "--filter", "exclusive-final"
@@ -15,7 +16,7 @@ fun main: int {
         "--set", "fixture=$root/build/fixture"
     ])
     val dependencySuite = loadTestSuite(
-        ablaHostReadFile("$root/tests/dependencies.json")
+        path("$root/tests/dependencies.json").readText()
     )
     val dependencySummary = runTestSuite(
         dependencySuite.suite,
@@ -25,7 +26,7 @@ fun main: int {
         )
     )
     val failureSuite = loadTestSuite(
-        ablaHostReadFile("$root/tests/dependency-fail.json")
+        path("$root/tests/dependency-fail.json").readText()
     )
     val failureSummary = runTestSuite(
         failureSuite.suite,
