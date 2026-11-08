@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "jobs": 2,
+  "timeoutMs": 5000,
+  "logDirectory": "build/test-results/output-pass",
+  "tests": [
+    {
+      "name": "equals",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "printf 'one\\ntwo\\n'"],
+        "outputEquals": "one\ntwo\n"
+      }]
+    },
+    {
+      "name": "contains-and-excludes",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "echo alpha beta; echo gamma >&2"],
+        "outputContains": ["alpha", "gamma", "beta"],
+        "outputExcludes": ["delta", ""]
+      }]
+    },
+    {
+      "name": "file-checks",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "printf 'key=value\\n' > ${log}/file-checks.out"],
+        "files": [
+          {"path": "${log}/file-checks.out", "equals": "key=value\n"},
+          {"path": "${log}/file-checks.out", "contains": "=val"}
+        ]
+      }]
+    },
+    {
+      "name": "status-and-output",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "echo failing as expected; exit 3"],
+        "expect": 3,
+        "outputContains": ["as expected"]
+      }]
+    }
+  ]
+}

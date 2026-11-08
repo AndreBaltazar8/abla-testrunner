@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "jobs": 2,
+  "timeoutMs": 5000,
+  "logDirectory": "build/test-results/output-fail",
+  "tests": [
+    {
+      "name": "equals-differs",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "printf 'one\\n'"],
+        "outputEquals": "one"
+      }]
+    },
+    {
+      "name": "contains-missing",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "echo alpha"],
+        "outputContains": ["alpha", "beta"]
+      }]
+    },
+    {
+      "name": "excluded-present",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "echo alpha beta"],
+        "outputExcludes": ["beta"]
+      }]
+    },
+    {
+      "name": "file-missing",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "true"],
+        "files": [{"path": "${log}/never-written.out", "contains": ""}]
+      }]
+    },
+    {
+      "name": "file-differs",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "printf 'a' > ${log}/file-differs.out"],
+        "files": [{"path": "${log}/file-differs.out", "equals": "b"}]
+      }]
+    },
+    {
+      "name": "later-step-skipped-after-output-failure",
+      "steps": [
+        {"command": "/bin/sh", "args": ["-c", "echo first"], "outputContains": ["second"]},
+        {"command": "/bin/sh", "args": ["-c", "echo ran > ${log}/should-not-exist.out"]}
+      ]
+    },
+    {
+      "name": "output-ok-but-status-wrong",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "echo fine; exit 2"],
+        "outputContains": ["fine"]
+      }]
+    }
+  ]
+}

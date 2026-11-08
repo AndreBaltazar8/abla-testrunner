@@ -94,7 +94,26 @@ Create `abla-tests.json` in the project root:
 }
 ```
 
-Supported substitutions in commands, arguments, directories, and environment
+A step can also check what it left behind, once its exit status matched: the step's
+log, which holds stdout and stderr together, and files it was to write.
+
+```json
+{
+  "command": "${root}/build/tool",
+  "outputEquals": "exact log text\n",
+  "outputContains": ["needle", "another"],
+  "outputExcludes": ["unwanted"],
+  "files": [
+    {"path": "${log}/result.txt", "equals": "exact file text\n"},
+    {"path": "${root}/build/report.txt", "contains": "ok"}
+  ]
+}
+```
+
+A missing file, a differing text or a needle that is absent (or, for `outputExcludes`,
+present) fails the test with the reason, and its later steps don't run.
+
+Supported substitutions in commands, arguments, directories, file paths and environment
 values are `${root}`, `${test}`, and `${log}`. Named `@name@` substitutions can
 be supplied with repeatable `--set name=value` options. `platform` may be
 `any`, `linux`, or `macos`.

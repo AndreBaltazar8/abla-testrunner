@@ -21,7 +21,14 @@ class TestStep(
     val environmentNames: array<string>,
     val environmentValues: array<string>,
     val expectedStatus: int,
-    val timeoutMilliseconds: int
+    val timeoutMilliseconds: int,
+    val hasOutputEquals: bool,
+    val outputEquals: string,
+    val outputContains: array<string>,
+    val outputExcludes: array<string>,
+    val filePaths: array<string>,
+    val fileModes: array<string>,
+    val fileValues: array<string>
 )
 
 class TestDefinition(
@@ -67,7 +74,8 @@ class TestExecution(
     var finished: int,
     var logPath: string,
     var actualStatus: int,
-    var timedOut: bool
+    var timedOut: bool,
+    var failure: string
 )
 
 class TestRunSummary(
@@ -388,6 +396,43 @@ fun loadTestSuite(source: string): TestSuiteLoad {
             if (!argumentsValue.isNull()) {
                 arguments = testParseStringArray(argumentsValue)
             }
+            val containsValue = step.get("outputContains")
+            if (error == "" && !containsValue.isNull() &&
+                !testStringArrayValid(containsValue)) {
+                error = "test $name step $stepIndex outputContains must be strings"
+            }
+            val excludesValue = step.get("outputExcludes")
+            if (error == "" && !excludesValue.isNull() &&
+                !testStringArrayValid(excludesValue)) {
+                error = "test $name step $stepIndex outputExcludes must be strings"
+            }
+            val hasEquals = step.get("outputEquals").isString()
+            if (error == "" && !step.get("outputEquals").isNull() && !hasEquals) {
+                error = "test $name step $stepIndex outputEquals must be a string"
+            }
+            val filePaths: array<string> = []
+            val fileModes: array<string> = []
+            val fileValues: array<string> = []
+            val filesValue = step.get("files")
+            if (error == "" && !filesValue.isNull() && !filesValue.isArray()) {
+                error = "test $name step $stepIndex files must be an array"
+            }
+            var fileIndex = 0
+            while (error == "" && filesValue.isArray() && fileIndex < filesValue.size()) {
+                val file = filesValue.at(fileIndex)
+                val hasEqualsFile = file.get("equals").isString()
+                val hasContainsFile = file.get("contains").isString()
+                if (!file.isObject() || !file.get("path").isString() ||
+                    hasEqualsFile == hasContainsFile) {
+                    error = "test $name step $stepIndex files[$fileIndex] needs a path and exactly one of equals or contains"
+                } else {
+                    filePaths.append(file.getString("path"))
+                    fileModes.append(if (hasEqualsFile) "equals" else "contains")
+                    fileValues.append(if (hasEqualsFile) file.getString("equals")
+                        else file.getString("contains"))
+                }
+                fileIndex = fileIndex + 1
+            }
             if (error == "") steps.append(TestStep(
                 command,
                 arguments,
@@ -395,7 +440,14 @@ fun loadTestSuite(source: string): TestSuiteLoad {
                 stepEnvironment.names,
                 stepEnvironment.values,
                 expected,
-                timeout
+                timeout,
+                hasEquals,
+                if (hasEquals) step.getString("outputEquals") else "",
+                if (containsValue.isNull()) [] else testParseStringArray(containsValue),
+                if (excludesValue.isNull()) [] else testParseStringArray(excludesValue),
+                filePaths,
+                fileModes,
+                fileValues
             ))
             stepIndex = stepIndex + 1
         }
@@ -617,6 +669,66 @@ fun testSelectDefinitions(
     definitions
 }
 
+/** What the step that just exited got wrong beyond its status: its combined output (the
+ *  step's log) or the files it was to leave; "" when it met every expectation. */
+fun testStepProblem(
+    execution: TestExecution,
+    options: TestRunnerOptions,
+    logDirectory: string
+): string {
+    val step = execution.test.steps[execution.stepIndex]
+    var problem = ""
+    val needsOutput = step.hasOutputEquals || step.outputContains.size > 0 ||
+        step.outputExcludes.size > 0
+    if (needsOutput) {
+        val output = if (path(execution.logPath).info().isFile()) {
+            path(execution.logPath).readText()
+        } else ""
+        if (step.hasOutputEquals && output != step.outputEquals) {
+            problem = "output differs from outputEquals"
+        }
+        var index = 0
+        while (problem == "" && index < step.outputContains.size) {
+            if (!testContains(output, step.outputContains[index])) {
+                problem = "output lacks \"${step.outputContains[index]}\""
+            }
+            index = index + 1
+        }
+        index = 0
+        while (problem == "" && index < step.outputExcludes.size) {
+            val unwanted = step.outputExcludes[index]
+            if (unwanted != "" && testContains(output, unwanted)) {
+                problem = "output has \"$unwanted\""
+            }
+            index = index + 1
+        }
+    }
+    var fileIndex = 0
+    while (problem == "" && fileIndex < step.filePaths.size) {
+        val location = testPath(options.root, testExpand(
+            step.filePaths[fileIndex], options.root, execution.test.name, logDirectory,
+            options.variableNames, options.variableValues
+        ))
+        if (!path(location).info().isFile()) {
+            problem = "file $location is missing"
+        } else {
+            val text = path(location).readText()
+            val wanted = testExpand(
+                step.fileValues[fileIndex], options.root, execution.test.name,
+                logDirectory, options.variableNames, options.variableValues
+            )
+            if (step.fileModes[fileIndex] == "equals" && text != wanted) {
+                problem = "file $location differs from its equals text"
+            }
+            if (step.fileModes[fileIndex] == "contains" && !testContains(text, wanted)) {
+                problem = "file $location lacks \"$wanted\""
+            }
+        }
+        fileIndex = fileIndex + 1
+    }
+    problem
+}
+
 fun testPollExecution(
     var execution: TestExecution,
     suite: TestSuite,
@@ -635,13 +747,17 @@ fun testPollExecution(
     if (status != -1) {
         execution.actualStatus = status
         val expected = testExecutionExpected(execution)
-        if (status == expected && !execution.timedOut &&
+        val problem = if (status == expected && !execution.timedOut) {
+            testStepProblem(execution, options, logDirectory)
+        } else ""
+        execution.failure = problem
+        if (status == expected && !execution.timedOut && problem == "" &&
             execution.stepIndex + 1 < execution.test.steps.size) {
             execution.stepIndex = execution.stepIndex + 1
             testStartStep(execution, suite, options, logDirectory)
         } else {
             execution.finished = processMonotonicMilliseconds()
-            if (status == expected && !execution.timedOut) {
+            if (status == expected && !execution.timedOut && problem == "") {
                 execution.state = "passed"
                 outcome = "passed"
             } else {
@@ -657,9 +773,13 @@ fun testPrintFailure(execution: TestExecution): void {
     val step = execution.test.steps[execution.stepIndex]
     val duration = execution.finished - execution.testStarted
     val timeout = if (execution.timedOut) " (timeout)" else ""
-    eprint(
-        "FAIL ${execution.test.name} ${duration}ms: step ${execution.stepIndex + 1} expected ${step.expectedStatus}, got ${execution.actualStatus}$timeout\n"
-    )
+    if (execution.failure != "") {
+        eprint("FAIL ${execution.test.name} ${duration}ms: step ${execution.stepIndex + 1} ${execution.failure}\n")
+    } else {
+        eprint(
+            "FAIL ${execution.test.name} ${duration}ms: step ${execution.stepIndex + 1} expected ${step.expectedStatus}, got ${execution.actualStatus}$timeout\n"
+        )
+    }
     if (path(execution.logPath).info().isFile()) {
         val output = path(execution.logPath).readText()
         if (output != "") {
@@ -687,7 +807,7 @@ fun runTestSuite(
     while (index < selected.size) {
         executions.append(TestExecution(
             selected[index], executions.size, "pending", 0,
-            SupervisedProcess(0), 0, 0, 0, "", -1, false
+            SupervisedProcess(0), 0, 0, 0, "", -1, false, ""
         ))
         index = index + 1
     }
