@@ -110,6 +110,11 @@ log, which holds stdout and stderr together, and files it was to write.
 }
 ```
 
+The log is the step's stdout and stderr in the order the process wrote them; a step that
+writes to both streams through buffers can interleave them differently from run to run, so
+prefer `outputContains` for such a step. Needles must not be empty strings (the manifest is
+rejected).
+
 A missing file, a differing text or a needle that is absent (or, for `outputExcludes`,
 present) fails the test with the reason, and its later steps don't run.
 

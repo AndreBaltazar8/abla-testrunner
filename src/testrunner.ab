@@ -198,6 +198,16 @@ fun testParseStringArray(value: Json): array<string> {
     result
 }
 
+fun testHasEmptyString(value: Json): bool {
+    var found = false
+    var index = 0
+    while (!found && value.isArray() && index < value.size()) {
+        if (value.at(index).isString() && value.at(index).asString() == "") found = true
+        index = index + 1
+    }
+    found
+}
+
 fun testStringArrayValid(value: Json): bool {
     var valid = value.isArray()
     var index = 0
@@ -401,10 +411,18 @@ fun loadTestSuite(source: string): TestSuiteLoad {
                 !testStringArrayValid(containsValue)) {
                 error = "test $name step $stepIndex outputContains must be strings"
             }
+            if (error == "" && containsValue.isArray() &&
+                testHasEmptyString(containsValue)) {
+                error = "test $name step $stepIndex outputContains must not hold an empty string"
+            }
             val excludesValue = step.get("outputExcludes")
             if (error == "" && !excludesValue.isNull() &&
                 !testStringArrayValid(excludesValue)) {
                 error = "test $name step $stepIndex outputExcludes must be strings"
+            }
+            if (error == "" && excludesValue.isArray() &&
+                testHasEmptyString(excludesValue)) {
+                error = "test $name step $stepIndex outputExcludes must not hold an empty string"
             }
             val hasEquals = step.get("outputEquals").isString()
             if (error == "" && !step.get("outputEquals").isNull() && !hasEquals) {
@@ -420,9 +438,10 @@ fun loadTestSuite(source: string): TestSuiteLoad {
             var fileIndex = 0
             while (error == "" && filesValue.isArray() && fileIndex < filesValue.size()) {
                 val file = filesValue.at(fileIndex)
-                val hasEqualsFile = file.get("equals").isString()
-                val hasContainsFile = file.get("contains").isString()
-                if (!file.isObject() || !file.get("path").isString() ||
+                val isObject = file.isObject()
+                val hasEqualsFile = isObject && file.get("equals").isString()
+                val hasContainsFile = isObject && file.get("contains").isString()
+                if (!isObject || !file.get("path").isString() ||
                     hasEqualsFile == hasContainsFile) {
                     error = "test $name step $stepIndex files[$fileIndex] needs a path and exactly one of equals or contains"
                 } else {

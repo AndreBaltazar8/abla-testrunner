@@ -2,6 +2,34 @@ import "../src/testrunner.ab"
 import "abla/fs"
 import "abla/process/time"
 
+/** How many malformed output expectations the loader fails to reject: 0 when it rejects them all. */
+fun outputManifestErrors(): int {
+    val steps = [
+        "\"outputEquals\": 5",
+        "\"outputContains\": \"one\"",
+        "\"outputContains\": [1]",
+        "\"outputContains\": [\"\"]",
+        "\"outputExcludes\": [\"\"]",
+        "\"files\": \"x\"",
+        "\"files\": [\"x\"]",
+        "\"files\": [{\"path\": \"p\"}]",
+        "\"files\": [{\"path\": \"p\", \"equals\": \"a\", \"contains\": \"b\"}]",
+        "\"files\": [{\"equals\": \"a\"}]"
+    ]
+    var accepted = 0
+    var index = 0
+    while (index < steps.size) {
+        val manifest = "{\"version\":1,\"tests\":[{\"name\":\"t\",\"steps\":[{\"command\":\"c\"," +
+            steps[index] + "}]}]}"
+        if (loadTestSuite(manifest).error == "") accepted = accepted + 1
+        index = index + 1
+    }
+    val valid =
+        "{\"version\":1,\"tests\":[{\"name\":\"t\",\"steps\":[{\"command\":\"c\",\"outputContains\":[\"x\"],\"files\":[{\"path\":\"p\",\"contains\":\"a\"}]}]}]}"
+    if (loadTestSuite(valid).error != "") accepted = accepted + 100
+    accepted
+}
+
 fun main: int {
     val root = currentDirectory().text
     val started = monotonicMilliseconds()
@@ -35,6 +63,7 @@ fun main: int {
             false, false, [], []
         )
     )
+    val negatives = outputManifestErrors()
     val leftover = path("$root/build/test-results/output-fail/should-not-exist.out")
     if (leftover.info().isFile()) leftover.remove()
     val outputPassed = runTestCommand(["--file", "tests/output-pass.json"])
@@ -45,7 +74,8 @@ fun main: int {
             root, "tests/output-fail.json", 2, "", false, false, [], []
         )
     )
-    if (outputPassed != 0) 8
+    if (negatives != 0) 11
+    else if (outputPassed != 0) 8
     else if (outputSuite.error != "" || outputSummary.passed != 0 ||
         outputSummary.failed != 7 || outputSummary.skipped != 0) 9
     else if (leftover.info().isFile()) 10

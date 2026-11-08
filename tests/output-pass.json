@@ -18,7 +18,7 @@
         "command": "/bin/sh",
         "args": ["-c", "echo alpha beta; echo gamma >&2"],
         "outputContains": ["alpha", "gamma", "beta"],
-        "outputExcludes": ["delta", ""]
+        "outputExcludes": ["delta"]
       }]
     },
     {
