@@ -104,6 +104,7 @@ log, which holds stdout and stderr together, and files it was to write.
   "outputContains": ["needle", "another"],
   "outputExcludes": ["unwanted"],
   "outputLineContainsInOrder": [["error[", "]:", "ticket"]],
+  "outputLineMatches": ["^error\\[E_[A-Z]+\\]: .*ticket$"],
   "files": [
     {"path": "${log}/result.txt", "equals": "exact file text\n"},
     {"path": "${root}/build/report.txt", "contains": "ok"}
@@ -115,6 +116,11 @@ The log is the step's stdout and stderr in the order the process wrote them; a s
 writes to both streams through buffers can interleave them differently from run to run, so
 prefer `outputContains` for such a step. Needles must not be empty strings (the manifest is
 rejected).
+
+`outputLineMatches` is a list of regular expressions (`abla/regex` syntax, RE2-like); each must match somewhere in at least one
+single line of the log (`grep -E`'s test of a line: `^` and `$` are the line's ends and `.` does not match a newline), and a
+manifest with a pattern that does not compile is rejected, with the compile error's message and offset. It needs a compiler
+whose standard library has `abla/regex`.
 
 `outputLineContainsInOrder` is a list of needle lists; each list must be found, in order, on one single
 line of the log (what `grep 'a.*b'` checks), so needles on different lines don't match.

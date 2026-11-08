@@ -6,6 +6,7 @@ import "abla/io"
 import "abla/process/time"
 import "abla/process/supervisor"
 import "abla/platform/host"
+import "abla/regex"
 
 
 class TestEnvironment(
@@ -27,6 +28,7 @@ class TestStep(
     val outputContains: array<string>,
     val outputExcludes: array<string>,
     val outputLineContainsInOrder: array<array<string>>,
+    val outputLineMatches: array<string>,
     val filePaths: array<string>,
     val fileModes: array<string>,
     val fileValues: array<string>
@@ -236,6 +238,22 @@ fun testLineHoldsInOrder(text: string, needles: array<string>): bool {
             index = index + 1
         }
         if (at >= 0) matched = true
+        start = end + 1
+    }
+    matched
+}
+
+/** Whether some line of `text` (without its newline) has a match of the regular expression
+ *  `pattern` anywhere in it: grep -E's test of a line; `^` and `$` are the line's ends. */
+fun testSomeLineMatches(text: string, pattern: string): bool {
+    val compiled = regexCompile(pattern)
+    if (!compiled.succeeded) return false
+    var matched = false
+    var start = 0
+    while (!matched && start <= text.size) {
+        var end = start
+        while (end < text.size && text[end] != 10) end = end + 1
+        if (compiled.regex.find(text.slice(start, end)) != null) matched = true
         start = end + 1
     }
     matched
@@ -467,6 +485,22 @@ fun loadTestSuite(source: string): TestSuiteLoad {
                 testHasEmptyString(excludesValue)) {
                 error = "test $name step $stepIndex outputExcludes must not hold an empty string"
             }
+            val matchesValue = step.get("outputLineMatches")
+            val outputLineMatches: array<string> = []
+            if (error == "" && !matchesValue.isNull() && !testStringArrayValid(matchesValue)) {
+                error = "test $name step $stepIndex outputLineMatches must be strings"
+            }
+            var matchIndex = 0
+            while (error == "" && matchesValue.isArray() && matchIndex < matchesValue.size()) {
+                val pattern = matchesValue.at(matchIndex).asString()
+                val compiled = regexCompile(pattern)
+                if (pattern == "") {
+                    error = "test $name step $stepIndex outputLineMatches[$matchIndex] must not be empty"
+                } else if (!compiled.succeeded) {
+                    error = "test $name step $stepIndex outputLineMatches[$matchIndex] is not a regular expression: ${compiled.error.message} at ${compiled.error.offset}"
+                } else outputLineMatches.append(pattern)
+                matchIndex = matchIndex + 1
+            }
             val linesValue = step.get("outputLineContainsInOrder")
             val outputLineContainsInOrder: array<array<string>> = []
             if (error == "" && !linesValue.isNull() && !linesValue.isArray()) {
@@ -522,6 +556,7 @@ fun loadTestSuite(source: string): TestSuiteLoad {
                 if (containsValue.isNull()) [] else testParseStringArray(containsValue),
                 if (excludesValue.isNull()) [] else testParseStringArray(excludesValue),
                 outputLineContainsInOrder,
+                outputLineMatches,
                 filePaths,
                 fileModes,
                 fileValues
@@ -756,7 +791,8 @@ fun testStepProblem(
     val step = execution.test.steps[execution.stepIndex]
     var problem = ""
     val needsOutput = step.hasOutputEquals || step.outputContains.size > 0 ||
-        step.outputExcludes.size > 0 || step.outputLineContainsInOrder.size > 0
+        step.outputExcludes.size > 0 || step.outputLineContainsInOrder.size > 0 ||
+        step.outputLineMatches.size > 0
     if (needsOutput) {
         val output = if (path(execution.logPath).info().isFile()) {
             path(execution.logPath).readText()
@@ -775,6 +811,13 @@ fun testStepProblem(
         while (problem == "" && index < step.outputLineContainsInOrder.size) {
             if (!testLineHoldsInOrder(output, step.outputLineContainsInOrder[index])) {
                 problem = "no output line holds " + testJoinNeedles(step.outputLineContainsInOrder[index]) + " in order"
+            }
+            index = index + 1
+        }
+        index = 0
+        while (problem == "" && index < step.outputLineMatches.size) {
+            if (!testSomeLineMatches(output, step.outputLineMatches[index])) {
+                problem = "no output line matches /" + step.outputLineMatches[index] + "/"
             }
             index = index + 1
         }

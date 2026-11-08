@@ -41,6 +41,14 @@
       }]
     },
     {
+      "name": "line-regex",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "echo 'error[E_X]: ownership.move-required:local.x:ticket'; echo 'last line 42'"],
+        "outputLineMatches": ["ownership\\.move-required:local.*:ticket", "^last line [0-9]+$", "E_(X|Y)\\]"]
+      }]
+    },
+    {
       "name": "status-and-output",
       "steps": [{
         "command": "/bin/sh",

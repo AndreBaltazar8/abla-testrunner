@@ -19,7 +19,12 @@ fun outputManifestErrors(): int {
         "\"outputLineContainsInOrder\": [\"a\"]",
         "\"outputLineContainsInOrder\": [[]]",
         "\"outputLineContainsInOrder\": [[\"\"]]",
-        "\"outputLineContainsInOrder\": [[1]]"
+        "\"outputLineContainsInOrder\": [[1]]",
+        "\"outputLineMatches\": \"a\"",
+        "\"outputLineMatches\": [1]",
+        "\"outputLineMatches\": [\"\"]",
+        "\"outputLineMatches\": [\"(unclosed\"]",
+        "\"outputLineMatches\": [\"a**\"]"
     ]
     var accepted = 0
     var index = 0
@@ -82,7 +87,7 @@ fun main: int {
     if (negatives != 0) 11
     else if (outputPassed != 0) 8
     else if (outputSuite.error != "" || outputSummary.passed != 0 ||
-        outputSummary.failed != 9 || outputSummary.skipped != 0) 9
+        outputSummary.failed != 12 || outputSummary.skipped != 0) 9
     else if (leftover.info().isFile()) 10
     else if (passed != 0) 1
     else if (elapsed >= 1800) 2

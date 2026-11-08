@@ -68,6 +68,30 @@
       }]
     },
     {
+      "name": "regex-matches-no-line",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "echo alpha"],
+        "outputLineMatches": ["alpha", "beta"]
+      }]
+    },
+    {
+      "name": "regex-anchored-per-line",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "echo alpha; echo beta"],
+        "outputLineMatches": ["^alpha.*beta$"]
+      }]
+    },
+    {
+      "name": "regex-dot-does-not-match-newline",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "printf 'a\\nb\\n'"],
+        "outputLineMatches": ["a.b"]
+      }]
+    },
+    {
       "name": "output-ok-but-status-wrong",
       "steps": [{
         "command": "/bin/sh",
