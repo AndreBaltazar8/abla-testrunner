@@ -103,6 +103,7 @@ log, which holds stdout and stderr together, and files it was to write.
   "outputEquals": "exact log text\n",
   "outputContains": ["needle", "another"],
   "outputExcludes": ["unwanted"],
+  "outputLineContainsInOrder": [["error[", "]:", "ticket"]],
   "files": [
     {"path": "${log}/result.txt", "equals": "exact file text\n"},
     {"path": "${root}/build/report.txt", "contains": "ok"}
@@ -114,6 +115,9 @@ The log is the step's stdout and stderr in the order the process wrote them; a s
 writes to both streams through buffers can interleave them differently from run to run, so
 prefer `outputContains` for such a step. Needles must not be empty strings (the manifest is
 rejected).
+
+`outputLineContainsInOrder` is a list of needle lists; each list must be found, in order, on one single
+line of the log (what `grep 'a.*b'` checks), so needles on different lines don't match.
 
 A missing file, a differing text or a needle that is absent (or, for `outputExcludes`,
 present) fails the test with the reason, and its later steps don't run.

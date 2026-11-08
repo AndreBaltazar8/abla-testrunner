@@ -33,6 +33,14 @@
       }]
     },
     {
+      "name": "line-in-order",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "echo first line; echo 'error[E_X]: thing:ticket here'; echo last"],
+        "outputLineContainsInOrder": [["error[E_", "]:", ":ticket"], ["first", "line"]]
+      }]
+    },
+    {
       "name": "status-and-output",
       "steps": [{
         "command": "/bin/sh",

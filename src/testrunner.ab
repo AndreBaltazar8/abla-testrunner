@@ -26,6 +26,7 @@ class TestStep(
     val outputEquals: string,
     val outputContains: array<string>,
     val outputExcludes: array<string>,
+    val outputLineContainsInOrder: array<array<string>>,
     val filePaths: array<string>,
     val fileModes: array<string>,
     val fileValues: array<string>
@@ -196,6 +197,48 @@ fun testParseStringArray(value: Json): array<string> {
         }
     }
     result
+}
+
+fun testJoinNeedles(needles: array<string>): string {
+    var text = ""
+    var index = 0
+    while (index < needles.size) {
+        text = text + (if (index == 0) "" else ", ") + "\"" + needles[index] + "\""
+        index = index + 1
+    }
+    text
+}
+
+/** The offset of `needle` in `text` at or after `from`, or -1. */
+fun testFindFrom(text: string, needle: string, from: int): int {
+    var offset = from
+    var found = -1
+    while (found < 0 && offset + needle.size <= text.size) {
+        if (text.slice(offset, offset + needle.size) == needle) found = offset
+        offset = offset + 1
+    }
+    found
+}
+
+/** Whether one line of `text` holds every needle, in order (grep 'a.*b' on a line). */
+fun testLineHoldsInOrder(text: string, needles: array<string>): bool {
+    var matched = false
+    var start = 0
+    while (!matched && start <= text.size) {
+        var end = start
+        while (end < text.size && text[end] != 10) end = end + 1
+        val line = text.slice(start, end)
+        var at = 0
+        var index = 0
+        while (at >= 0 && index < needles.size) {
+            val found = testFindFrom(line, needles[index], at)
+            at = if (found < 0) -1 else found + needles[index].size
+            index = index + 1
+        }
+        if (at >= 0) matched = true
+        start = end + 1
+    }
+    matched
 }
 
 fun testHasEmptyString(value: Json): bool {
@@ -424,6 +467,20 @@ fun loadTestSuite(source: string): TestSuiteLoad {
                 testHasEmptyString(excludesValue)) {
                 error = "test $name step $stepIndex outputExcludes must not hold an empty string"
             }
+            val linesValue = step.get("outputLineContainsInOrder")
+            val outputLineContainsInOrder: array<array<string>> = []
+            if (error == "" && !linesValue.isNull() && !linesValue.isArray()) {
+                error = "test $name step $stepIndex outputLineContainsInOrder must be an array of arrays of strings"
+            }
+            var lineIndex = 0
+            while (error == "" && linesValue.isArray() && lineIndex < linesValue.size()) {
+                val needles = linesValue.at(lineIndex)
+                if (!testStringArrayValid(needles) || needles.size() == 0 ||
+                    testHasEmptyString(needles)) {
+                    error = "test $name step $stepIndex outputLineContainsInOrder[$lineIndex] must be non-empty strings"
+                } else outputLineContainsInOrder.append(testParseStringArray(needles))
+                lineIndex = lineIndex + 1
+            }
             val hasEquals = step.get("outputEquals").isString()
             if (error == "" && !step.get("outputEquals").isNull() && !hasEquals) {
                 error = "test $name step $stepIndex outputEquals must be a string"
@@ -464,6 +521,7 @@ fun loadTestSuite(source: string): TestSuiteLoad {
                 if (hasEquals) step.getString("outputEquals") else "",
                 if (containsValue.isNull()) [] else testParseStringArray(containsValue),
                 if (excludesValue.isNull()) [] else testParseStringArray(excludesValue),
+                outputLineContainsInOrder,
                 filePaths,
                 fileModes,
                 fileValues
@@ -698,7 +756,7 @@ fun testStepProblem(
     val step = execution.test.steps[execution.stepIndex]
     var problem = ""
     val needsOutput = step.hasOutputEquals || step.outputContains.size > 0 ||
-        step.outputExcludes.size > 0
+        step.outputExcludes.size > 0 || step.outputLineContainsInOrder.size > 0
     if (needsOutput) {
         val output = if (path(execution.logPath).info().isFile()) {
             path(execution.logPath).readText()
@@ -710,6 +768,13 @@ fun testStepProblem(
         while (problem == "" && index < step.outputContains.size) {
             if (!testContains(output, step.outputContains[index])) {
                 problem = "output lacks \"${step.outputContains[index]}\""
+            }
+            index = index + 1
+        }
+        index = 0
+        while (problem == "" && index < step.outputLineContainsInOrder.size) {
+            if (!testLineHoldsInOrder(output, step.outputLineContainsInOrder[index])) {
+                problem = "no output line holds " + testJoinNeedles(step.outputLineContainsInOrder[index]) + " in order"
             }
             index = index + 1
         }

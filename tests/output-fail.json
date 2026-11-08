@@ -52,6 +52,22 @@
       ]
     },
     {
+      "name": "needles-on-different-lines",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "echo alpha; echo beta"],
+        "outputLineContainsInOrder": [["alpha", "beta"]]
+      }]
+    },
+    {
+      "name": "needles-in-the-wrong-order",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "echo beta alpha"],
+        "outputLineContainsInOrder": [["alpha", "beta"]]
+      }]
+    },
+    {
       "name": "output-ok-but-status-wrong",
       "steps": [{
         "command": "/bin/sh",
