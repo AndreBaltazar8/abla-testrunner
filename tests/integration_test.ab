@@ -15,6 +15,9 @@ fun outputManifestErrors(): int {
         "\"files\": [{\"path\": \"p\"}]",
         "\"files\": [{\"path\": \"p\", \"equals\": \"a\", \"contains\": \"b\"}]",
         "\"files\": [{\"equals\": \"a\"}]",
+        "\"files\": [{\"path\": \"p\", \"absent\": false}]",
+        "\"files\": [{\"path\": \"p\", \"absent\": \"yes\"}]",
+        "\"files\": [{\"path\": \"p\", \"absent\": true, \"contains\": \"a\"}]",
         "\"outputLineContainsInOrder\": \"a\"",
         "\"outputLineContainsInOrder\": [\"a\"]",
         "\"outputLineContainsInOrder\": [[]]",
@@ -87,7 +90,7 @@ fun main: int {
     if (negatives != 0) 11
     else if (outputPassed != 0) 8
     else if (outputSuite.error != "" || outputSummary.passed != 0 ||
-        outputSummary.failed != 12 || outputSummary.skipped != 0) 9
+        outputSummary.failed != 13 || outputSummary.skipped != 0) 9
     else if (leftover.info().isFile()) 10
     else if (passed != 0) 1
     else if (elapsed >= 1800) 2

@@ -37,6 +37,14 @@
       }]
     },
     {
+      "name": "file-present-but-absent-wanted",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "printf 'a' > ${log}/file-present.out"],
+        "files": [{"path": "${log}/file-present.out", "absent": true}]
+      }]
+    },
+    {
       "name": "file-differs",
       "steps": [{
         "command": "/bin/sh",

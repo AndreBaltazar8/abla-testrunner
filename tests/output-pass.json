@@ -33,6 +33,14 @@
       }]
     },
     {
+      "name": "file-absent",
+      "steps": [{
+        "command": "/bin/sh",
+        "args": ["-c", "true"],
+        "files": [{"path": "${log}/never-written-absent.out", "absent": true}]
+      }]
+    },
+    {
       "name": "line-in-order",
       "steps": [{
         "command": "/bin/sh",

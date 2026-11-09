@@ -532,14 +532,19 @@ fun loadTestSuite(source: string): TestSuiteLoad {
                 val isObject = file.isObject()
                 val hasEqualsFile = isObject && file.get("equals").isString()
                 val hasContainsFile = isObject && file.get("contains").isString()
-                if (!isObject || !file.get("path").isString() ||
-                    hasEqualsFile == hasContainsFile) {
-                    error = "test $name step $stepIndex files[$fileIndex] needs a path and exactly one of equals or contains"
+                val hasAbsentFile = isObject && file.get("absent").isBoolean() &&
+                    file.get("absent").asBoolean()
+                val modeCount = (if (hasEqualsFile) 1 else 0) +
+                    (if (hasContainsFile) 1 else 0) + (if (hasAbsentFile) 1 else 0)
+                if (!isObject || !file.get("path").isString() || modeCount != 1 ||
+                    (isObject && !file.get("absent").isNull() && !hasAbsentFile)) {
+                    error = "test $name step $stepIndex files[$fileIndex] needs a path and exactly one of equals, contains or absent: true"
                 } else {
                     filePaths.append(file.getString("path"))
-                    fileModes.append(if (hasEqualsFile) "equals" else "contains")
+                    fileModes.append(if (hasEqualsFile) "equals"
+                        else if (hasContainsFile) "contains" else "absent")
                     fileValues.append(if (hasEqualsFile) file.getString("equals")
-                        else file.getString("contains"))
+                        else if (hasContainsFile) file.getString("contains") else "")
                 }
                 fileIndex = fileIndex + 1
             }
@@ -836,7 +841,9 @@ fun testStepProblem(
             step.filePaths[fileIndex], options.root, execution.test.name, logDirectory,
             options.variableNames, options.variableValues
         ))
-        if (!path(location).info().isFile()) {
+        if (step.fileModes[fileIndex] == "absent") {
+            if (path(location).exists()) problem = "file $location exists"
+        } else if (!path(location).info().isFile()) {
             problem = "file $location is missing"
         } else {
             val text = path(location).readText()

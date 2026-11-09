@@ -107,7 +107,8 @@ log, which holds stdout and stderr together, and files it was to write.
   "outputLineMatches": ["^error\\[E_[A-Z]+\\]: .*ticket$"],
   "files": [
     {"path": "${log}/result.txt", "equals": "exact file text\n"},
-    {"path": "${root}/build/report.txt", "contains": "ok"}
+    {"path": "${root}/build/report.txt", "contains": "ok"},
+    {"path": "${root}/build/refused.out", "absent": true}
   ]
 }
 ```
