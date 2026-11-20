@@ -1,6 +1,5 @@
 import "../src/testrunner.ab"
 import "abla/fs"
-import "abla/process/time"
 
 fun main: int {
     val root = currentDirectory().text
